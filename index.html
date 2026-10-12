@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MySQL 銷售資料分析儀表板</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+:root{font-family:system-ui,-apple-system,'Noto Sans TC',sans-serif;color:#17243b;background:#f3f6fb}*{box-sizing:border-box}body{margin:0}main{max-width:1100px;margin:auto;padding:28px 16px 60px}header{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}h1{font-size:clamp(23px,4vw,32px);margin:0 0 8px}p{color:#64748b;margin:0}.status{margin:22px 0;padding:12px 16px;border-radius:12px;background:#e8f0ff;color:#24498b}.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}.stat,.panel{background:white;border:1px solid #e4eaf3;border-radius:16px;padding:20px;box-shadow:0 4px 14px #12284c09}.stat span{font-size:14px;color:#64748b}.stat strong{display:block;font-size:clamp(20px,3vw,29px);margin-top:8px;overflow-wrap:anywhere}.charts{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:18px}.panel h2{font-size:18px;margin:0 0 18px}.panel.wide{grid-column:1/-1}.chartbox{height:320px;position:relative}button{background:#285be8;color:white;border:0;border-radius:10px;padding:11px 16px;font-weight:700;cursor:pointer}footer{color:#718096;font-size:13px;margin-top:22px}@media(max-width:700px){.stats{grid-template-columns:repeat(2,1fr)}.charts{grid-template-columns:1fr}.panel.wide{grid-column:auto}.chartbox{height:290px}}
+</style>
+</head>
+<body><main>
+<header><div><h1>銷售資料分析儀表板</h1><p>MySQL 即時資料 · Render API · Chart.js</p></div><button id="reload">重新讀取資料</button></header>
+<div class="status" id="status" role="status">正在讀取 MySQL 最新資料…</div>
+<section class="stats">
+<div class="stat"><span>銷售紀錄</span><strong id="records">—</strong></div>
+<div class="stat"><span>銷售數量</span><strong id="quantity">—</strong></div>
+<div class="stat"><span>退貨數量</span><strong id="returns">—</strong></div>
+<div class="stat"><span>淨營收（NT$）</span><strong id="revenue">—</strong></div>
+</section>
+<section class="charts">
+<article class="panel wide"><h2>每日淨營收趨勢</h2><div class="chartbox"><canvas id="daily"></canvas></div></article>
+<article class="panel"><h2>商品淨營收比較</h2><div class="chartbox"><canvas id="products"></canvas></div></article>
+<article class="panel"><h2>類別淨營收占比</h2><div class="chartbox"><canvas id="categories"></canvas></div></article>
+</section>
+<footer>每次開啟或重新整理網頁，都會重新查詢 MySQL。資料更新後請按 F5 或點「重新讀取資料」。</footer>
+</main>
+<script>
+const API='https://mysql-sales-dashboard-umbq.onrender.com/api/sales';
+const charts={};
+const fmt=n=>Number(n||0).toLocaleString('zh-TW');
+function draw(id,type,items,options={}){
+ if(charts[id])charts[id].destroy();
+ const labels=items.map(x=>x.name), values=items.map(x=>Number(x.value));
+ charts[id]=new Chart(document.getElementById(id),{
+  type,data:{labels,datasets:[{label:'淨營收（NT$）',data:values,backgroundColor:type==='doughnut'?['#315fe5','#18a999','#f5a623','#9b78e7','#e86f73','#50a5d6','#b5b8c7']: '#4d7cf3',borderColor:type==='line'?'#315fe5':undefined,borderWidth:type==='line'?2:0,fill:type==='line',tension:.25,pointRadius:type==='line'?2:undefined}]},
+  options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:type==='doughnut'},tooltip:{callbacks:{label:c=>`${c.label||''}：NT$ ${fmt(c.parsed.y??c.parsed)}`}}},scales:type==='doughnut'?{}:{y:{beginAtZero:true,ticks:{callback:v=>fmt(v)}},x:{ticks:{maxRotation:55,minRotation:0,autoSkip:true,maxTicksLimit:12}}},...options}
+ });
+}
+async function load(){
+ const s=document.getElementById('status');s.textContent='正在讀取 MySQL 最新資料…';
+ try{
+  const res=await fetch(API+'?t='+Date.now(),{cache:'no-store'});
+  if(!res.ok)throw new Error('API 回應 '+res.status);
+  const d=await res.json();if(!d.summary||!Array.isArray(d.daily))throw new Error('資料格式不正確');
+  document.getElementById('records').textContent=fmt(d.summary.records);
+  document.getElementById('quantity').textContent=fmt(d.summary.quantity);
+  document.getElementById('returns').textContent=fmt(d.summary.returns);
+  document.getElementById('revenue').textContent=fmt(d.summary.netRevenue);
+  draw('daily','line',d.daily);
+  draw('products','bar',d.products||[],{indexAxis:'y'});
+  draw('categories','doughnut',d.categories||[]);
+  s.textContent='已成功讀取 MySQL 最新資料 · 更新時間：'+new Date().toLocaleString('zh-TW');
+ }catch(e){s.textContent='資料載入失敗：'+e.message+'。免費 Render 服務可能需要約 1 分鐘啟動，請稍後按「重新讀取資料」。';}
+}
+document.getElementById('reload').addEventListener('click',load);
+load();
+</script></body></html>
